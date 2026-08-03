@@ -1977,9 +1977,11 @@ async function pullFromCloud(){
 }
 
 async function autoSyncOnLogin(){
+  console.log('[autoSync] chamada, isSyncConfigured=', isSyncConfigured());
   if(!isSyncConfigured()) return;
   // Primeiro tenta enviar qualquer alteração pendente desta sessão anterior.
   await flushSyncQueue();
+  console.log('[autoSync] apos flush, pending=', Array.from(syncPending));
   if(syncPending.size > 0){
     // Ainda há alterações locais não enviadas (provavelmente ficou offline) —
     // não importa da nuvem agora para não sobrescrever esse trabalho não sincronizado.
@@ -1987,6 +1989,7 @@ async function autoSyncOnLogin(){
   }
   try{
     const resp = await callAppsScript({ action:'getAll' });
+    console.log('[autoSync] resposta getAll ok=', resp && resp.ok, 'ingredientes=', resp && resp.data && resp.data.ingredientes);
     if(!resp || !resp.ok) return;
     let mudou = false;
     Object.entries(resp.data||{}).forEach(([nome, valor])=>{
@@ -1996,6 +1999,7 @@ async function autoSyncOnLogin(){
       if(localStorage.getItem(STORAGE_PREFIX+nome) !== novoJson){
         localStorage.setItem(STORAGE_PREFIX+nome, novoJson);
         mudou = true;
+        console.log('[autoSync] atualizou colecao', nome);
       }
     });
     if(mudou){
@@ -2004,8 +2008,9 @@ async function autoSyncOnLogin(){
       showToast('info','Dados atualizados','Sincronizado automaticamente com a nuvem.');
     }
     updateSyncStatusUI();
+    console.log('[autoSync] concluido, mudou=', mudou);
   }catch(e){
-    // Silencioso — provavelmente sem internet; o sistema continua funcionando normalmente com os dados locais.
+    console.log('[autoSync] ERRO', e && e.message, e && e.stack);
   }
 }
 
@@ -5565,6 +5570,7 @@ function enterApp(){
   const initialView = (window.location.hash||'').replace('#','') || 'dashboard';
   navigateTo(initialView);
 
+  console.log('[enterApp] chamando autoSyncOnLogin agora');
   autoSyncOnLogin();
 }
 
