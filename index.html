@@ -1557,13 +1557,18 @@ const DB = {
     if(typeof queueSync === 'function') queueSync(key);
   },
   ensureInit(){
+    // Escreve direto no localStorage (sem passar por this.set) para não marcar
+    // esses valores padrão como "alterações pendentes" de sincronização — isso
+    // faria a importação automática da nuvem se recusar a trazer dados reais
+    // em um dispositivo novo, pensando que havia trabalho local não sincronizado.
     Object.keys(DEFAULT_DB).forEach(key=>{
       if(localStorage.getItem(STORAGE_PREFIX + key) === null){
-        this.set(key, DEFAULT_DB[key]);
+        localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(DEFAULT_DB[key]));
       }
     });
     // Preenche campos novos (ex: config.seguranca) em bancos criados antes deles existirem
-    this.set('config', deepMergeDefaults(this.get('config'), DEFAULT_DB.config));
+    const configMesclado = deepMergeDefaults(this.get('config'), DEFAULT_DB.config);
+    localStorage.setItem(STORAGE_PREFIX + 'config', JSON.stringify(configMesclado));
   },
   clearAll(){
     const preserved = ['usuarios','auditLog'];
@@ -1968,6 +1973,39 @@ async function pullFromCloud(){
     showToast('success','Sincronizado','Dados atualizados a partir da nuvem.');
   }catch(e){
     showToast('error','Falha na sincronização','Verifique sua conexão e a URL configurada.');
+  }
+}
+
+async function autoSyncOnLogin(){
+  if(!isSyncConfigured()) return;
+  // Primeiro tenta enviar qualquer alteração pendente desta sessão anterior.
+  await flushSyncQueue();
+  if(syncPending.size > 0){
+    // Ainda há alterações locais não enviadas (provavelmente ficou offline) —
+    // não importa da nuvem agora para não sobrescrever esse trabalho não sincronizado.
+    return;
+  }
+  try{
+    const resp = await callAppsScript({ action:'getAll' });
+    if(!resp || !resp.ok) return;
+    let mudou = false;
+    Object.entries(resp.data||{}).forEach(([nome, valor])=>{
+      if(SYNC_EXCLUDE.includes(nome)) return;
+      if(valor === null || valor === undefined) return;
+      const novoJson = JSON.stringify(valor);
+      if(localStorage.getItem(STORAGE_PREFIX+nome) !== novoJson){
+        localStorage.setItem(STORAGE_PREFIX+nome, novoJson);
+        mudou = true;
+      }
+    });
+    if(mudou){
+      applyTheme(); applyBranding();
+      if($('#view-dashboard')?.classList.contains('active')) renderDashboard();
+      showToast('info','Dados atualizados','Sincronizado automaticamente com a nuvem.');
+    }
+    updateSyncStatusUI();
+  }catch(e){
+    // Silencioso — provavelmente sem internet; o sistema continua funcionando normalmente com os dados locais.
   }
 }
 
@@ -5526,6 +5564,8 @@ function enterApp(){
 
   const initialView = (window.location.hash||'').replace('#','') || 'dashboard';
   navigateTo(initialView);
+
+  autoSyncOnLogin();
 }
 
 function init(){
