@@ -1999,7 +1999,7 @@ async function autoSyncOnLogin(){
       if(localStorage.getItem(STORAGE_PREFIX+nome) !== novoJson){
         localStorage.setItem(STORAGE_PREFIX+nome, novoJson);
         mudou = true;
-        console.log('[autoSync] atualizou colecao', nome);
+        console.log('[autoSync] atualizou colecao', nome, '-> gravou:', novoJson.slice(0,120), '| releitura imediata:', localStorage.getItem(STORAGE_PREFIX+nome)?.slice(0,120));
       }
     });
     if(mudou){
@@ -2008,7 +2008,8 @@ async function autoSyncOnLogin(){
       showToast('info','Dados atualizados','Sincronizado automaticamente com a nuvem.');
     }
     updateSyncStatusUI();
-    console.log('[autoSync] concluido, mudou=', mudou);
+    console.log('[autoSync] concluido, mudou=', mudou, '| ingredientes agora=', localStorage.getItem(STORAGE_PREFIX+'ingredientes'));
+    setTimeout(()=>{ console.log('[autoSync] checagem tardia (1s depois) ingredientes=', localStorage.getItem(STORAGE_PREFIX+'ingredientes')); }, 1000);
   }catch(e){
     console.log('[autoSync] ERRO', e && e.message, e && e.stack);
   }
