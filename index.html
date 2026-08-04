@@ -1550,7 +1550,11 @@ const DEFAULT_DB = {
     corPrimaria: 'pink-logo',
     corSecundaria: 'gold-500',
     seguranca: { timeoutMinutos: 20, googleClientId: '' },
-    integracao: { appsScriptUrl: '', apiKey: '', ultimoSync: '' }
+    integracao: {
+      appsScriptUrl: 'https://script.google.com/macros/s/AKfycbx8YsP0nl1iCQDEJ-77YR603XTDmhrjapWiX--UfssmMjWXovfhoPmej-jnvQ4h11g/exec',
+      apiKey: 'dj-687ad51e4caa38a025127c73248ce568f841',
+      ultimoSync: ''
+    }
   },
   sabores: DEFAULT_SABORES.map(nome => ({id:uid(), nome})),
   categoriasProdutos: DEFAULT_CATEGORIAS_PRODUTOS.slice(),
@@ -1589,6 +1593,11 @@ const DB = {
     });
     // Preenche campos novos (ex: config.seguranca) em bancos criados antes deles existirem
     const configMesclado = deepMergeDefaults(this.get('config'), DEFAULT_DB.config);
+    // Aparelhos antigos que ficaram com a integração em branco (antes dela vir configurada
+    // por padrão) recebem a conexão padrão automaticamente, sem precisar configurar na mão.
+    if(!configMesclado.integracao.appsScriptUrl && DEFAULT_DB.config.integracao.appsScriptUrl){
+      configMesclado.integracao = { ...DEFAULT_DB.config.integracao };
+    }
     localStorage.setItem(STORAGE_PREFIX + 'config', JSON.stringify(configMesclado));
   },
   clearAll(){
