@@ -665,17 +665,38 @@ input,select,textarea{font-family:inherit;color:var(--text-900);}
       <div class="auth-subtitle">Vamos configurar o sistema da sua empresa. Isso só acontece uma vez.</div>
     </div>
     <div class="auth-error" id="setupError"><i class="fa-solid fa-circle-exclamation"></i><span></span></div>
-    <div class="auth-form">
-      <div class="form-grid">
-        <div class="field" style="grid-column:1/-1;"><label>Nome da empresa <span class="req">*</span></label><input type="text" id="setupEmpresa" placeholder="Delícias da Jéssika" value="Delícias da Jéssika"></div>
-        <div class="field"><label>Seu nome (administrador) <span class="req">*</span></label><input type="text" id="setupNome" placeholder="Jéssika"></div>
-        <div class="field"><label>Telefone</label><input type="tel" id="setupTelefone" placeholder="(83) 99317-5365"></div>
-        <div class="field" style="grid-column:1/-1;"><label>E-mail <span class="req">*</span></label><input type="email" id="setupEmail" placeholder="voce@exemplo.com"></div>
-        <div class="field"><label>Senha <span class="req">*</span></label><input type="password" id="setupSenha" placeholder="Mínimo 6 caracteres"></div>
-        <div class="field"><label>Confirmar senha <span class="req">*</span></label><input type="password" id="setupSenhaConfirma" placeholder="Repita a senha"></div>
+
+    <div id="setupStepNovo">
+      <div class="auth-form">
+        <div class="form-grid">
+          <div class="field" style="grid-column:1/-1;"><label>Nome da empresa <span class="req">*</span></label><input type="text" id="setupEmpresa" placeholder="Delícias da Jéssika" value="Delícias da Jéssika"></div>
+          <div class="field"><label>Seu nome (administrador) <span class="req">*</span></label><input type="text" id="setupNome" placeholder="Jéssika"></div>
+          <div class="field"><label>Telefone</label><input type="tel" id="setupTelefone" placeholder="(83) 99317-5365"></div>
+          <div class="field" style="grid-column:1/-1;"><label>E-mail <span class="req">*</span></label><input type="email" id="setupEmail" placeholder="voce@exemplo.com"></div>
+          <div class="field"><label>Senha <span class="req">*</span></label><input type="password" id="setupSenha" placeholder="Mínimo 6 caracteres"></div>
+          <div class="field"><label>Confirmar senha <span class="req">*</span></label><input type="password" id="setupSenhaConfirma" placeholder="Repita a senha"></div>
+        </div>
+        <button class="btn btn-primary" id="setupSubmitBtn" style="width:100%;justify-content:center;margin-top:6px;"><i class="fa-solid fa-check"></i> Criar administrador e iniciar</button>
+        <div class="auth-links" style="margin-top:10px;text-align:center;">
+          <a id="goToConectarNuvemBtn">Já existe um sistema? Conectar este aparelho à nuvem</a>
+        </div>
       </div>
-      <button class="btn btn-primary" id="setupSubmitBtn" style="width:100%;justify-content:center;margin-top:6px;"><i class="fa-solid fa-check"></i> Criar administrador e iniciar</button>
     </div>
+
+    <div id="setupStepConectar" style="display:none;">
+      <div class="auth-form">
+        <p style="font-size:.85rem;color:var(--muted,#8a7a80);margin:0 0 4px;">Informe os mesmos dados de integração já configurados no outro aparelho (Configurações → Integração). O sistema vai reconhecer as contas e os dados existentes.</p>
+        <div class="form-grid">
+          <div class="field" style="grid-column:1/-1;"><label>URL do Apps Script <span class="req">*</span></label><input type="text" id="setupConectarUrl" placeholder="https://script.google.com/macros/s/.../exec"></div>
+          <div class="field" style="grid-column:1/-1;"><label>Chave de API <span class="req">*</span></label><input type="text" id="setupConectarChave" placeholder="Sua chave de API"></div>
+        </div>
+        <button class="btn btn-primary" id="setupConectarBtn" style="width:100%;justify-content:center;margin-top:6px;"><i class="fa-solid fa-cloud"></i> Conectar e verificar</button>
+        <div class="auth-links" style="margin-top:10px;text-align:center;">
+          <a id="voltarDoConectarBtn">Voltar</a>
+        </div>
+      </div>
+    </div>
+
     <div class="auth-version">Delícias da Jéssika · Sistema de Gestão · v1.0</div>
   </div>
 </div>
@@ -1884,7 +1905,15 @@ function logAudit({acao, entidade, entidadeId, descricao, valorAnterior, valorNo
 /* =========================================================================
    4h. SINCRONIZAÇÃO COM GOOGLE SHEETS (via Google Apps Script)
    ========================================================================= */
-const SYNC_EXCLUDE = ['usuarios']; // credenciais nunca saem do dispositivo local
+const SYNC_EXCLUDE = []; // usuários agora sincronizam também, para permitir login em qualquer aparelho
+
+function mesclarUsuariosDaNuvem(cloudArr){
+  if(!Array.isArray(cloudArr)) return;
+  const local = DB.get('usuarios');
+  const porId = new Map(local.map(u=>[u.id,u]));
+  cloudArr.forEach(u=> porId.set(u.id, u)); // em conflito de mesmo id, a nuvem vence
+  localStorage.setItem(STORAGE_PREFIX+'usuarios', JSON.stringify(Array.from(porId.values())));
+}
 const SYNC_QUEUE_KEY = 'dj_syncPending';
 
 function getIntegracaoConfig(){
@@ -1964,9 +1993,9 @@ async function pullFromCloud(){
     if(!resp || !resp.ok){ showToast('error','Falha na sincronização', resp?.error || 'Não foi possível conectar ao Apps Script.'); return; }
     Object.entries(resp.data||{}).forEach(([nome, valor])=>{
       if(SYNC_EXCLUDE.includes(nome)) return;
-      if(valor !== null && valor !== undefined){
-        localStorage.setItem(STORAGE_PREFIX+nome, JSON.stringify(valor));
-      }
+      if(valor === null || valor === undefined) return;
+      if(nome === 'usuarios'){ mesclarUsuariosDaNuvem(valor); return; }
+      localStorage.setItem(STORAGE_PREFIX+nome, JSON.stringify(valor));
     });
     applyTheme(); applyBranding();
     renderDashboard();
@@ -1992,6 +2021,12 @@ async function autoSyncOnLogin(){
     Object.entries(resp.data||{}).forEach(([nome, valor])=>{
       if(SYNC_EXCLUDE.includes(nome)) return;
       if(valor === null || valor === undefined) return;
+      if(nome === 'usuarios'){
+        const antes = localStorage.getItem(STORAGE_PREFIX+'usuarios');
+        mesclarUsuariosDaNuvem(valor);
+        if(localStorage.getItem(STORAGE_PREFIX+'usuarios') !== antes) mudou = true;
+        return;
+      }
       const novoJson = JSON.stringify(valor);
       if(localStorage.getItem(STORAGE_PREFIX+nome) !== novoJson){
         localStorage.setItem(STORAGE_PREFIX+nome, novoJson);
@@ -5237,6 +5272,41 @@ function showSetupScreen(){
   $('#appShell').style.display = 'none';
   const cfg = DB.get('config');
   $('#setupLogoBadge').innerHTML = cfg.empresa.logo ? `<img src="${cfg.empresa.logo}">` : '🍰';
+  showSetupStep('novo');
+}
+
+function showSetupStep(step){
+  $('#setupStepNovo').style.display = step==='novo' ? 'block' : 'none';
+  $('#setupStepConectar').style.display = step==='conectar' ? 'block' : 'none';
+  hideAuthError('#setupError');
+}
+
+async function handleConectarNuvemSubmit(){
+  const url = $('#setupConectarUrl').value.trim();
+  const chave = $('#setupConectarChave').value.trim();
+  hideAuthError('#setupError');
+  if(!url || !chave){ showAuthError('#setupError','Preencha a URL e a chave de API.'); return; }
+
+  const cfg = DB.get('config');
+  cfg.integracao = { appsScriptUrl: url, apiKey: chave, ultimoSync:'' };
+  localStorage.setItem(STORAGE_PREFIX+'config', JSON.stringify(cfg));
+
+  const btn = $('#setupConectarBtn');
+  const textoOriginal = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Conectando...';
+
+  await pullUsuariosAntesDoLogin();
+
+  btn.disabled = false;
+  btn.innerHTML = textoOriginal;
+
+  if(findAdminExists()){
+    showToast('success','Conectado!','Sistema reconhecido. Faça login com sua conta.');
+    showLoginScreen();
+  }else{
+    showAuthError('#setupError','Não encontramos nenhuma conta com esses dados. Verifique a URL e a chave de API no outro aparelho (Configurações → Integração).');
+  }
 }
 
 function showLoginStep(step){
@@ -5388,6 +5458,9 @@ async function handleResetSubmit(){
 
 function initAuthScreenEvents(){
   $('#setupSubmitBtn').addEventListener('click', handleSetupSubmit);
+  $('#goToConectarNuvemBtn').addEventListener('click', ()=> showSetupStep('conectar'));
+  $('#voltarDoConectarBtn').addEventListener('click', ()=> showSetupStep('novo'));
+  $('#setupConectarBtn').addEventListener('click', handleConectarNuvemSubmit);
   $('#loginSubmitBtn').addEventListener('click', handleLoginSubmit);
   $('#goToForgotBtn').addEventListener('click', ()=> showLoginStep('forgot'));
   $('#forgotBackBtn1').addEventListener('click', ()=> showLoginStep('login'));
@@ -5568,9 +5641,26 @@ function enterApp(){
   autoSyncOnLogin();
 }
 
-function init(){
+async function pullUsuariosAntesDoLogin(){
+  if(!isSyncConfigured()) return;
+  try{
+    const resp = await callAppsScript({ action:'getCollection', collection:'usuarios' });
+    if(resp && resp.ok) mesclarUsuariosDaNuvem(resp.data);
+  }catch(e){
+    // offline ou Apps Script indisponível — segue com as contas já conhecidas neste aparelho.
+  }
+}
+
+async function init(){
   DB.ensureInit();
   initAuthScreenEvents();
+
+  const sessaoAtual = getSession();
+  const sessaoJaValidaLocalmente = sessaoAtual && DB.get('usuarios').some(u=>u.id===sessaoAtual.usuarioId);
+  if(!sessaoJaValidaLocalmente){
+    // Busca contas criadas em outros aparelhos antes de decidir entre login/configuração inicial.
+    await pullUsuariosAntesDoLogin();
+  }
 
   if(!findAdminExists()){
     showSetupScreen();
