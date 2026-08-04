@@ -1976,19 +1976,10 @@ async function pullFromCloud(){
   }
 }
 
-function debugLog(msg){
-  try{
-    const arr = JSON.parse(localStorage.getItem('dj_debugLog')||'[]');
-    arr.push(new Date().toISOString().slice(11,23) + ' ' + msg);
-    localStorage.setItem('dj_debugLog', JSON.stringify(arr.slice(-50)));
-  }catch(e){}
-}
 async function autoSyncOnLogin(){
-  debugLog('chamada, isSyncConfigured=' + isSyncConfigured());
   if(!isSyncConfigured()) return;
   // Primeiro tenta enviar qualquer alteração pendente desta sessão anterior.
   await flushSyncQueue();
-  debugLog('apos flush, pending=' + JSON.stringify(Array.from(syncPending)));
   if(syncPending.size > 0){
     // Ainda há alterações locais não enviadas (provavelmente ficou offline) —
     // não importa da nuvem agora para não sobrescrever esse trabalho não sincronizado.
@@ -1996,7 +1987,6 @@ async function autoSyncOnLogin(){
   }
   try{
     const resp = await callAppsScript({ action:'getAll' });
-    debugLog('resposta getAll ok=' + (resp && resp.ok) + ' ingredientes=' + JSON.stringify(resp && resp.data && resp.data.ingredientes));
     if(!resp || !resp.ok) return;
     let mudou = false;
     Object.entries(resp.data||{}).forEach(([nome, valor])=>{
@@ -2006,7 +1996,6 @@ async function autoSyncOnLogin(){
       if(localStorage.getItem(STORAGE_PREFIX+nome) !== novoJson){
         localStorage.setItem(STORAGE_PREFIX+nome, novoJson);
         mudou = true;
-        debugLog('atualizou ' + nome + ' -> releitura imediata=' + localStorage.getItem(STORAGE_PREFIX+nome)?.slice(0,150));
       }
     });
     if(mudou){
@@ -2015,10 +2004,8 @@ async function autoSyncOnLogin(){
       showToast('info','Dados atualizados','Sincronizado automaticamente com a nuvem.');
     }
     updateSyncStatusUI();
-    debugLog('concluido, mudou=' + mudou + ' ingredientes agora=' + localStorage.getItem(STORAGE_PREFIX+'ingredientes'));
-    setTimeout(()=>{ debugLog('checagem tardia (1s) ingredientes=' + localStorage.getItem(STORAGE_PREFIX+'ingredientes')); }, 1000);
   }catch(e){
-    debugLog('ERRO ' + (e && e.message));
+    // Silencioso — provavelmente sem internet; o sistema continua funcionando normalmente com os dados locais.
   }
 }
 
@@ -5578,7 +5565,6 @@ function enterApp(){
   const initialView = (window.location.hash||'').replace('#','') || 'dashboard';
   navigateTo(initialView);
 
-  debugLog('[enterApp] chamando autoSyncOnLogin agora');
   autoSyncOnLogin();
 }
 
